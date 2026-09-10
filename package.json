@@ -1,0 +1,19 @@
+{
+  "name": "91ninjas-webflow-code",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Custom JavaScript bundles for the 91 Ninjas Webflow site.",
+  "scripts": {
+    "build": "node build.js",
+    "watch": "node build.js --watch",
+    "dev": "node dev.js",
+    "postinstall": "node scripts/create-cert.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.9"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+
+# Local reference/prototype file
+footage-room.html
+
+# Locally generated HTTPS credentials
+localhost.pem
+localhost-key.pem
