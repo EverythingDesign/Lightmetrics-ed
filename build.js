@@ -1,4 +1,4 @@
-import { mkdir, readdir } from 'node:fs/promises';
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { watch } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,8 +24,19 @@ async function findJavaScriptFiles(directory) {
   return files.flat();
 }
 
-export async function buildProject() {
+/**
+ * Wipe dist before every build. esbuild only overwrites files it emits, so a
+ * source file that gets renamed or deleted leaves its old bundle behind --
+ * and those stale bundles still ship via jsDelivr.
+ */
+async function cleanOutputDir() {
+  await rm(outputDir, { recursive: true, force: true });
   await mkdir(outputDir, { recursive: true });
+  await writeFile(path.join(outputDir, '.gitkeep'), '');
+}
+
+export async function buildProject() {
+  await cleanOutputDir();
   const entryPoints = await findJavaScriptFiles(sourceDir);
 
   if (entryPoints.length === 0) {

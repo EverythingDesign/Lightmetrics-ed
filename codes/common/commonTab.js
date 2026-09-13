@@ -264,3 +264,7 @@ class CommonTab {
     if (this.linksOuter) this.linksOuter.style.top = '';
   }
 }
+
+// Exposed on window: the bundle is wrapped in an IIFE, so a top-level class
+// would be invisible to Webflow -- and esbuild would tree-shake it away.
+window.CommonTab = CommonTab;
