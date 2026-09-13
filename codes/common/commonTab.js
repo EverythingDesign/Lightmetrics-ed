@@ -90,6 +90,7 @@ class CommonTab {
       this.nav = document.querySelector(CommonTab.SELECTORS.nav);
 
       this.handleBreakpoint();
+      this.initScrollTrigger();
     }
 
     // Respect whichever link the markup already marks active.
@@ -200,6 +201,48 @@ class CommonTab {
     this.applyNavOffset();
   }
 
+  /* ---------- hide the sticky links once the tabs scroll past ---------- */
+
+  setLinksHidden(hidden) {
+    if (!this.linksOuter) return;
+
+    window.gsap.to(this.linksOuter, {
+      opacity: hidden ? 0 : 1,
+      duration: 0.3,
+      ease: 'power2.out',
+      overwrite: true
+    });
+    this.linksOuter.style.pointerEvents = hidden ? 'none' : '';
+  }
+
+  initScrollTrigger() {
+    if (!this.linksOuter) return;
+    if (!window.gsap || !window.ScrollTrigger) return;
+
+    window.gsap.registerPlugin(window.ScrollTrigger);
+    this.media = window.gsap.matchMedia();
+
+    this.media.add(CommonTab.MOBILE_QUERY, () => {
+      const trigger = window.ScrollTrigger.create({
+        trigger: this.root,
+        start: 'bottom 70%',
+        onEnter: () => this.setLinksHidden(true),
+        onLeaveBack: () => this.setLinksHidden(false),
+        // Covers loading the page already scrolled past the start.
+        onRefresh: (self) => this.setLinksHidden(self.scroll() >= self.start)
+      });
+
+      return () => {
+        trigger.kill();
+        // Kill first -- an in-flight tween would otherwise keep writing
+        // opacity after clearProps and leave the bar stuck invisible.
+        window.gsap.killTweensOf(this.linksOuter);
+        window.gsap.set(this.linksOuter, { clearProps: 'opacity' });
+        this.linksOuter.style.pointerEvents = '';
+      };
+    });
+  }
+
   handleLinkClick(event) {
     const link = event.target.closest(CommonTab.SELECTORS.link);
     if (!link || !this.linkList.contains(link)) return;
@@ -217,6 +260,7 @@ class CommonTab {
       this.dropdownBound = false;
     }
     this.mobile?.removeEventListener('change', this.handleBreakpoint);
+    this.media?.revert();
     if (this.linksOuter) this.linksOuter.style.top = '';
   }
 }

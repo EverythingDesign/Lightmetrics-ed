@@ -176,13 +176,13 @@
     alignIndicator(button) {
       if (!button || !this.indicator) return;
 
-      const listRect = this.modelsListInner.getBoundingClientRect();
-      const buttonRect = button.getBoundingClientRect();
-      const indicatorRect = this.indicator.getBoundingClientRect();
+      // The indicator is absolutely positioned inside the scrolling list, so
+      // its transform is measured from the list's padding edge -- the same
+      // origin offsetTop uses. getBoundingClientRect() is viewport-relative
+      // and would land scrollTop pixels off whenever the list is scrolled.
       const y =
-        buttonRect.top -
-        listRect.top +
-        (buttonRect.height - indicatorRect.height) / 2;
+        button.offsetTop +
+        (button.offsetHeight - this.indicator.offsetHeight) / 2;
 
       this.indicator.style.transform = `translate3d(0, ${y}px, 0)`;
     }
