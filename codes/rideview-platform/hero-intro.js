@@ -13,12 +13,39 @@ const initHeroIntro = () => {
     revealSpread: 1.35,
     pullbackDuration: 1.8,
     finalOpacity: 0.5,
+    // Sampled from the reference: hot magenta core, violet outer bloom.
+    glowCore: '236, 64, 176',
+    glowHalo: '148, 96, 246',
+    // 1 in N tiles is flagged as an important event. Lower = more glow.
+    eventEvery: 11,
+    eventHits: 3,
+    idlePulseDuration: 1.7,
     gridColor: 'rgba(255,255,255,0.18)',
     gridLineWidth: 1,
     hoverTilt: 2.2,
     hoverShift: 6,
     hoverDuration: 0.85
   };
+  // Three shadows in every state so GSAP can interpolate between them.
+  // The canvas settles at finalOpacity, so raw alphas run high to survive it.
+  const glowState = (level) => {
+    const core = config.glowCore;
+    const halo = config.glowHalo;
+    if (level === 0) {
+      return '0 0 0px 0px rgba(' + core + ',0), ' +
+             '0 0 0px 0px rgba(' + core + ',0), ' +
+             '0 0 0px 0px rgba(' + halo + ',0)';
+    }
+    if (level === 1) {
+      return '0 0 16px 1px rgba(' + core + ',0.70), ' +
+             '0 0 44px 10px rgba(' + core + ',0.35), ' +
+             '0 0 88px 24px rgba(' + halo + ',0.22)';
+    }
+    return '0 0 26px 3px rgba(' + core + ',0.85), ' +
+           '0 0 70px 16px rgba(' + core + ',0.45), ' +
+           '0 0 130px 38px rgba(' + halo + ',0.28)';
+  };
+
   const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   const hoverQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
   const originals = [canvas, sourceImage, ...copy].map((element) => ({
@@ -34,7 +61,9 @@ const initHeroIntro = () => {
   const planes = {};
   let grids = [];
   let tiles = [];
+  let eventTiles = [];
   let timeline;
+  let pulseTween;
   let ready = false;
   let destroyed = false;
   let sizeKey = '';
@@ -177,10 +206,13 @@ const initHeroIntro = () => {
           width: tileWidth,
           borderRadius: Math.min(12, tileWidth * 0.065),
           opacity: 0,
-          boxShadow: '0 0 0px rgba(91,210,255,0)',
+          boxShadow: glowState(0),
           backfaceVisibility: 'hidden'
         });
         tiles.push(tile);
+        // Deterministic so the same events light up on every resize.
+        const eventSeed = (column * 5 + row * 3 + name.length * 7) % config.eventEvery;
+        if (eventSeed < config.eventHits) eventTiles.push(tile);
       }
     }
   };
@@ -194,6 +226,7 @@ const initHeroIntro = () => {
     if (key === sizeKey) return false;
     sizeKey = key;
     tiles = [];
+    eventTiles = [];
     grids = [];
     const mobile = width <= 767;
     const ratio = sourceImage.naturalWidth / sourceImage.naturalHeight || 1.6;
@@ -243,14 +276,34 @@ const initHeroIntro = () => {
     return true;
   };
 
+  // The flagged events keep breathing after the intro, so the room reads as
+  // something actively watching rather than a finished static frame.
+  const startEventPulse = () => {
+    pulseTween?.kill();
+    pulseTween = null;
+    if (motionQuery.matches || !eventTiles.length) return;
+
+    pulseTween = gsap.to(eventTiles, {
+      boxShadow: glowState(2),
+      duration: config.idlePulseDuration,
+      repeat: -1,
+      yoyo: true,
+      ease: 'sine.inOut',
+      stagger: { amount: 2.2, from: 'random' }
+    });
+  };
+
   const showFinal = () => {
     resetHover(true);
     gsap.set(room, { z: cameraEnd });
-    gsap.set(tiles, { opacity: 1, clearProps: 'boxShadow,willChange' });
+    gsap.set(tiles, { opacity: 1, clearProps: 'willChange' });
+    gsap.set(tiles, { boxShadow: glowState(0) });
+    gsap.set(eventTiles, { boxShadow: glowState(1) });
     gsap.set(grids, { opacity: 1 });
     gsap.set(canvas, { opacity: config.finalOpacity });
     gsap.set(copy, { autoAlpha: 1 });
     introComplete = true;
+    startEventPulse();
   };
 
   const start = () => {
@@ -278,6 +331,7 @@ const initHeroIntro = () => {
       onComplete: () => {
         gsap.set(canvas, { clearProps: 'willChange' });
         introComplete = true;
+        startEventPulse();
       }
     });
     gsap.set(canvas, { willChange: 'opacity' });
@@ -293,11 +347,16 @@ const initHeroIntro = () => {
     timeline.to(room, {
       z: cameraEnd, duration: config.pullbackDuration, ease: 'power3.inOut'
     }, 'pullback');
-    timeline.to(tiles, {
-      boxShadow: '0 0 18px rgba(91,210,255,0.32), 0 0 32px rgba(136,112,255,0.15)',
-      duration: 0.65, repeat: 1, yoyo: true,
-      stagger: { amount: 0.25, from: 'center' }, ease: 'sine.inOut'
-    }, 'pullback');
+    // Events flare one after another -- detection sweeping the room -- then
+    // settle to a held highlight instead of fading back to nothing.
+    timeline.to(eventTiles, {
+      boxShadow: glowState(2), duration: 0.55,
+      stagger: { amount: 0.9, from: 'random' }, ease: 'power2.out'
+    }, 'pullback+=0.1');
+    timeline.to(eventTiles, {
+      boxShadow: glowState(1), duration: 0.8,
+      stagger: { amount: 0.9, from: 'random' }, ease: 'sine.inOut'
+    }, 'pullback+=0.95');
     timeline.to(canvas, {
       opacity: config.finalOpacity, duration: 0.85, ease: 'power2.inOut'
     }, 'pullback+=0.95');
@@ -331,6 +390,7 @@ const initHeroIntro = () => {
     destroy() {
       destroyed = true;
       timeline?.kill();
+      pulseTween?.kill();
       Object.values(hoverSetters).forEach((setter) => setter.tween.kill());
       hero.removeEventListener('pointermove', moveHover);
       hero.removeEventListener('pointerleave', leaveHover);
